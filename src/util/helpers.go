@@ -131,7 +131,10 @@ func WalkToEndOfPath(pathSplit []string, currentDirectory *File, root *File) (*F
 // Convert a slice of strings to a byte slice
 func StringSliceToByteSlice(strSlice []string) []byte {
 	var byteSlice []byte
-	for _, str := range strSlice {
+	for i, str := range strSlice {
+		if i > 0 {
+			byteSlice = append(byteSlice, ' ')
+		}
 		byteSlice = append(byteSlice, []byte(str)...)
 	}
 	return byteSlice
