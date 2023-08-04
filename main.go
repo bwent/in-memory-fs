@@ -11,13 +11,14 @@ import (
 
 // Maps a valid method to its acceptable number of inputs
 var ValidInputMap = map[string][]int{
-	"pwd":       {0},
-	"mkdir":     {1},
-	"cd":        {1},
-	"ls":        {0, 1},
-	"rm":        {1, 2},
-	"mkfile":    {1},
-	"writefile": {2},
+	"pwd":    {0},
+	"mkdir":  {1},
+	"cd":     {1},
+	"ls":     {0, 1},
+	"rm":     {1, 2},
+	"mkfile": {1},
+	// -1 indicates we have no bounds on the input size
+	"writefile": {-1},
 	"readfile":  {1},
 	"mvfile":    {2},
 	"find":      {2},
@@ -73,7 +74,7 @@ func validateInputs(method string, inputs []string) error {
 	if validInputSizes == nil {
 		return fmt.Errorf("Invalid method %s- run 'help' for guidance", method)
 	}
-	if !contains(validInputSizes, len(inputs)) {
+	if !contains(validInputSizes, len(inputs)) && validInputSizes[0] != -1 {
 		validSizesStr := strings.Trim(strings.Join(strings.Fields(fmt.Sprint(validInputSizes)), ", "), "[]")
 		return fmt.Errorf("Invalid input length (saw=%d, expected=%s). Run 'help' for guidance", len(inputs), validSizesStr)
 	}

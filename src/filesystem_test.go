@@ -21,11 +21,6 @@ func TestNewFileSystem(t *testing.T) {
 	if fs.currentDirectory != fs.root {
 		t.Errorf("Expected current directory to be the root directory")
 	}
-
-	// Verify that the fileMap is initialized and empty
-	if len(fs.fileMap) != 0 {
-		t.Errorf("Expected empty fileMap but got size=%d", len(fs.fileMap))
-	}
 }
 
 func TestPwd(t *testing.T) {

@@ -10,7 +10,6 @@ import (
 type Filesystem struct {
 	root             *util.File
 	currentDirectory *util.File
-	fileMap          map[string]*util.File
 }
 
 // Creates a new filesystem and sets the current directory to the root ()
@@ -19,7 +18,6 @@ func NewFileSystem() *Filesystem {
 	return &Filesystem{
 		root:             rootDir,
 		currentDirectory: rootDir,
-		fileMap:          make(map[string]*util.File),
 	}
 }
 
