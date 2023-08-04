@@ -9,7 +9,8 @@ import (
 func SplitPath(path string) []string {
 	var paths = []string{}
 	for _, p := range strings.Split(path, "/") {
-		if p != "" {
+		str := strings.TrimSpace(p)
+		if str != "" {
 			paths = append(paths, p)
 		}
 	}
@@ -86,14 +87,33 @@ func RmRecursion(curr *File) {
 	}
 }
 
-func WalkToEndOfPath(path string, wd *File) (*File, error) {
-	pathSplit := SplitPath(path)
+// Helper function to traverse from the current directory to the specified path,
+// using an absolute or relative path
+func WalkToEndOfPath(pathSplit []string, currentDirectory *File, root *File) (*File, error) {
+	wd := currentDirectory
+
+	// If the path name starts with "~", this is an absolute path - start from the root
+	// Else start from the current working directory
+	if pathSplit[0] == "~" {
+		wd = root
+		pathSplit = pathSplit[1:]
+	}
+
 	for _, name := range pathSplit {
-		if !ExistsInCurrentDir(wd, name, true) {
-			return wd, fmt.Errorf("Directory not found: %s", name)
+		if name == ".." {
+			// If we see ".." we're trying to navigate one directory up in the tree
+			// Set the current directory to its parent
+			if wd.GetParent() != nil {
+				wd = wd.GetParent()
+			} else {
+				// This means we're already at the root, so we shouldn't need to do anything
+			}
+		} else if !ExistsInCurrentDir(wd, name, true) {
+			return nil, fmt.Errorf("Directory not found: %s", name)
+		} else {
+			// Advance to the child node by name
+			wd = wd.GetChildByName(name)
 		}
-		// If the directory exists, advance the working directory and add
-		wd = wd.GetChildByName(name)
 	}
 	return wd, nil
 }
