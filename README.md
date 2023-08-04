@@ -65,7 +65,7 @@ $ go test
 
 ## Notes
 ### TODOs
-* Add unit tests for all `util` class files
+* Add unit tests for all `util` class files; add additional unit tests to check for more edge cases
 * Add concurrency controls by building a Mutex into the File class and locking around write (and possibly also read) operations
 * Add symlink and hard link support
 

@@ -86,9 +86,13 @@ func TestMkDir(t *testing.T) {
 		t.Errorf("Expected the new directory to be /bwent but got %s", res)
 	}
 
-	// Test creating a new invalid directory
+	// Create a new invalid directory should throw error
 	res, err = fs.MkDir("/invalid/path")
 	assertErrorAndEmptyResult(res, err, "Directory not found: invalid", t)
+
+	// Create a new empty directory should throw error
+	res, err = fs.MkDir(" ")
+	assertErrorAndEmptyResult(res, err, "Must provide at least one directory name", t)
 }
 
 func TestCd(t *testing.T) {
@@ -134,13 +138,21 @@ func TestLs(t *testing.T) {
 	// List contents of directory by path should return the single directory under that path
 	res, err = fs.Ls("/home/test")
 	assertMatchesAndNoErrors(res, err, "foo", t)
+
+	// Test with absolute path
+	res, err = fs.Ls("~/home")
+	assertMatchesAndNoErrors(res, err, "test", t)
+
+	// Test with ".."
+	fs.Cd("/home/test")
+	res, err = fs.Ls("../")
+	assertMatchesAndNoErrors(res, err, "test", t)
 }
 
 func TestRm(t *testing.T) {
 	// Set up test subject
 	fs := NewFileSystem()
 
-	fmt.Println(fs.Ls())
 	fs.MkDir("dir1")
 	fs.MkDir("dir1/dir2")
 	// Shouldn't be able to non-recursively remove a directory
@@ -149,9 +161,9 @@ func TestRm(t *testing.T) {
 
 	// Shouldn't be able to remove a nonexistent directory
 	res, err = fs.Rm("/test", false)
-	assertErrorAndEmptyResult(res, err, "Directory does not exist among children of /", t)
+	assertErrorAndEmptyResult(res, err, "Directory not found: test", t)
 
-	// Happy path
+	// Happy path 1
 	res, err = fs.Rm("/dir1", true)
 	assertMatchesAndNoErrors(res, err, "dir1", t)
 
@@ -159,8 +171,6 @@ func TestRm(t *testing.T) {
 	if res != "" {
 		t.Errorf("Expected the current directory to be empty after removing dir1 but instead was %s", res)
 	}
-
-	// TODO add more nuanced test cases here
 }
 
 func TestMkFile(t *testing.T) {
@@ -225,8 +235,9 @@ func TestMoveFile(t *testing.T) {
 	fs.MkFile("file1")
 	// Test moving file to invalid directory
 	res, err = fs.MvFile("file1", "dir2")
-	assertErrorAndEmptyResult(res, err, "Target directory dir2 does not exist", t)
+	assertErrorAndEmptyResult(res, err, "Directory not found: dir2", t)
 
+	fs.MkDir("dir2")
 	// Test moving directory
 	res, err = fs.MvFile("dir1", "dir2")
 	assertErrorAndEmptyResult(res, err, "File dir1 is a directory; cannot move", t)
@@ -234,13 +245,18 @@ func TestMoveFile(t *testing.T) {
 	fs.MkFile("file2")
 	// Test moving directory
 	res, err = fs.MvFile("file2", "file1")
-	assertErrorAndEmptyResult(res, err, "Target path file1 is not a directory", t)
+	assertErrorAndEmptyResult(res, err, "Directory not found: file1", t)
 
 	// Happy path
 	res, err = fs.MvFile("file1", "dir1")
 	assertMatchesAndNoErrors(res, err, "dir1", t)
 	res, err = fs.MvFile("file2", "dir1/")
 	assertMatchesAndNoErrors(res, err, "dir1", t)
+
+	fs.MkDir("dir1/test1")
+	fs.MkFile("file3")
+	res, err = fs.MvFile("file3", "~/dir1/test1")
+	assertMatchesAndNoErrors(res, err, "~/dir1/test1", t)
 }
 
 func TestFind(t *testing.T) {

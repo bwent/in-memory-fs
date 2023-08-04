@@ -59,26 +59,32 @@ func (fs *Filesystem) MkDir(path string) (string, error) {
 
 	// Split the path into individual directory names
 	pathSplit := util.SplitPath(path)
-	lastIdx := len(pathSplit) - 1
+	length := len(pathSplit)
 
-	// Loop through each directory name in the path
-	for i, name := range pathSplit {
-		if !util.ExistsInCurrentDir(wd, name, true) {
-			// If the next directory does not exist, return an error if it's not the last element in the path
-			if i != lastIdx {
-				return "", fmt.Errorf("Directory not found: %s", name)
-			} else {
-				// If this is the last (or only) element in the path, create the new directory
-				// and add it as a child of the current directory
-				newDir := util.NewFile(name, true, wd)
-				wd.UpsertChild(name, newDir)
-			}
+	// The name of the new directory
+	var name string
+
+	if length == 0 {
+		return "", errors.New("Must provide at least one directory name")
+	} else if length == 1 {
+		// If there's only one element, the new dir name is the first element
+		name = pathSplit[0]
+	} else {
+		pathToTraverse := pathSplit[:len(pathSplit)-1]
+		leafNode, err := util.WalkToEndOfPath(pathToTraverse, fs.currentDirectory, fs.root)
+		if err != nil {
+			return "", err
 		}
-		// Move to the child directory
-		wd = wd.GetChildByName(name)
+		wd = leafNode
+		// Set the dir name to the last element
+		name = pathSplit[len(pathSplit)-1]
 	}
 
-	return wd.GetName(), nil
+	// Take the last element and add the new directory
+	newDir := util.NewFile(name, true, wd)
+	wd.UpsertChild(name, newDir)
+
+	return name, nil
 }
 
 // Changes the current working directory to the specified path
@@ -94,47 +100,14 @@ func (fs *Filesystem) MkDir(path string) (string, error) {
 //	string - the current working directory name
 //	error  - an error if the path provided is invalid
 func (fs *Filesystem) Cd(path string) (string, error) {
-	pathSplit := util.SplitPath(path)
-	var wd *util.File
-
-	// If the path name starts with "~", start from the root
-	// Else start from the current working directory
-	if strings.HasPrefix(path, "~") {
-		wd = fs.root
-		pathSplit = pathSplit[1:]
-	} else {
-		wd = fs.currentDirectory
+	// Traverse to the end of the path specified
+	leafNode, err := util.WalkToEndOfPath(util.SplitPath(path), fs.currentDirectory, fs.root)
+	if err != nil {
+		return "", err
 	}
-
-	// Use a stack to keep track of all nodes we've visited in the path
-	dirStack := []*util.File{}
-
-	for _, name := range pathSplit {
-		if name == ".." {
-			// If we see ".." we're trying to navigate one directory up in the tree
-			// Set the current directory to its parent
-			if wd.GetParent() != nil {
-				wd = wd.GetParent()
-			} else {
-				// This means we're already at the root, so we shouldn't need to do anything
-			}
-		} else if !util.ExistsInCurrentDir(wd, name, true) {
-			// If the next directory does not exist, return an error
-			return "", fmt.Errorf("Directory not found: %s", name)
-		} else {
-			// Advance to the child node by name
-			wd = wd.GetChildByName(name)
-			dirStack = append(dirStack, wd)
-		}
-	}
-
-	// Update the current directory based on the processed stack
-	if len(dirStack) > 0 {
-		// Working directory is set to the last directory from the stack
-		wd = dirStack[len(dirStack)-1]
-	}
-	fs.currentDirectory = wd
-	return fs.currentDirectory.GetName(), nil
+	// Set the current working directory to the last node in the tree
+	fs.currentDirectory = leafNode
+	return leafNode.GetName(), nil
 }
 
 // Lists the contents (files and subdirectories) of the specified path or current directory.
@@ -151,32 +124,24 @@ func (fs *Filesystem) Cd(path string) (string, error) {
 func (fs *Filesystem) Ls(path ...string) (string, error) {
 	var wd *util.File
 
-	if len(path) > 0 {
-		pathSplit := util.SplitPath(path[0])
-		// Start from the current directory
-		wd = fs.currentDirectory
+	if len(path) == 1 {
+		splitPath := util.SplitPath(path[0])
 
-		// Walk the directory tree to resolve each element of the path
-		for _, name := range pathSplit {
-			wd = wd.GetChildByName(name)
-			if wd == nil {
-				return "", fmt.Errorf("Directory not found: %s", name)
-			}
+		// Traverse to the end of the path
+		leafNode, err := util.WalkToEndOfPath(splitPath, fs.currentDirectory, fs.root)
+		if err != nil {
+			return "", err
 		}
+		wd = leafNode
 	} else {
 		wd = fs.currentDirectory
 	}
 
-	// List the contents of the directory
-	pathNodes := []string{}
-	for _, value := range wd.GetChildren() {
-		pathNodes = append(pathNodes, value.GetName())
-	}
-
-	return strings.Join(pathNodes, " "), nil
+	// Return all the child directory names
+	return strings.Join(wd.GetChildrenNames(), " "), nil
 }
 
-// Removes a file or directory. If a directory is provided, the removal must be recursive unless
+// Removes a file or directory from the current directory. If a directory is provided, the removal must be recursive unless
 // the directory has no children.
 // Parameters:
 //
@@ -196,7 +161,7 @@ func (fs *Filesystem) Rm(path string, recursive bool) (string, error) {
 	// Get the file or directory to remove
 	toRemove := wd.GetChildByName(path)
 	if toRemove == nil {
-		return "", fmt.Errorf("Directory does not exist among children of %s", wd.GetName())
+		return "", fmt.Errorf("Directory not found: %s", path)
 	}
 
 	if !recursive {
@@ -294,8 +259,8 @@ func (fs *Filesystem) ReadFile(name string) (string, error) {
 	return file.ReadFileContents(), nil
 }
 
-// Moves the specified file to the given target directory. Both must be within the current working directory
-// TODO: Support relative/absolute paths for the target in the future
+// Moves the specified file (within the current directory) to the specified target directory.
+// TODO: Support relative/absolute paths for the source file in the future
 //
 // Paramters:
 //
@@ -313,7 +278,17 @@ func (fs *Filesystem) MvFile(name string, target string) (string, error) {
 
 	wd := fs.currentDirectory
 	file := wd.GetChildByName(name)
-	targetDir := wd.GetChildByName(target)
+
+	splitPath := util.SplitPath(target)
+	if len(splitPath) == 0 {
+		return "", fmt.Errorf("Invalid target path: %s", target)
+	}
+
+	// Walk to the end of the path
+	targetDir, err := util.WalkToEndOfPath(util.SplitPath(target), fs.currentDirectory, fs.root)
+	if err != nil {
+		return "", err
+	}
 
 	// Validation
 	if file == nil {
