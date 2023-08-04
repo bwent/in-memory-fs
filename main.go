@@ -20,7 +20,7 @@ var ValidInputMap = map[string][]int{
 	"writefile": {2},
 	"readfile":  {1},
 	"mvfile":    {2},
-	"find":      {1, 2},
+	"find":      {2},
 }
 
 const HelpText string = `Commands:
