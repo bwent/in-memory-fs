@@ -90,6 +90,10 @@ func (f *File) SetParent(parent *File) {
 	f.parent = parent
 }
 
+func (f *File) SetName(name string) {
+	f.name = name
+}
+
 // Writes the specified data (represented as a byte slice) to a file
 // Returns an error if the newData + exisitng contents exceeds `MaxFileSize`
 func (f *File) WriteFileData(data []byte) error {
