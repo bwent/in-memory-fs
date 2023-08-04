@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// helper method to split a string into slice of strings separated by "/"
+// Splits a string into slice of strings separated by "/"
 func SplitPath(path string) []string {
 	var paths = []string{}
 	for _, p := range strings.Split(path, "/") {
@@ -17,13 +17,14 @@ func SplitPath(path string) []string {
 	return paths
 }
 
-// helper method to check if a file exists in the diven directory
+// Check if a file exists in the diven directory. "isDir" is used to specify whether we should
+// check if it's a file or directory
 func ExistsInCurrentDir(dir *File, name string, isDir bool) bool {
 	return dir.GetChildByName(name) != nil && dir.GetChildByName(name).IsDirectory() == isDir
 }
 
-// helper method to recursively traverse the directory tree until we reach the root directory,
-// adding directory names to a list as we go
+// Recursively traverse the directory tree until we reach the root directory,
+// adding the current directory names to a list as we go
 func PwdRecursion(dirs *[]string, curr *File) {
 	parent := curr.GetParent()
 	if parent == nil {
@@ -36,6 +37,7 @@ func PwdRecursion(dirs *[]string, curr *File) {
 	*dirs = append(*dirs, curr.GetName())
 }
 
+// Convert a slice of Files into a string slice, using the filename
 func FileSliceToString(data []*File, root *File) []string {
 	allMatches := []string{}
 	for _, file := range data {
@@ -44,36 +46,45 @@ func FileSliceToString(data []*File, root *File) []string {
 	return allMatches
 }
 
+// Breadth-first serach implementation used for searching files within the filesystem
+// Uses a map
 func BFS(node *File, target string) []*File {
 	if node == nil {
 		return nil
 	}
 
+	// Keep track of all nodes we've already visited (optimization)
 	visited := make(map[string]bool)
+
+	// Use a queue for inspecting nodes
 	queue := queue{node}
 	result := []*File{}
 
 	for queue.Size() > 0 {
+		// Take the next node off the queue
 		next, _ := queue.PopFront()
+		// If we've already seen it, skip
 		if visited[next.GetName()] {
 			continue
 		}
 		visited[next.GetName()] = true
 
 		if next.GetName() == target {
-			// Found a match, add it to the result
+			// Found a match, so add it to the result
 			result = append(result, next)
 		}
 
+		// Add all the child nodes to the queue for inspection
 		for _, child := range next.GetChildren() {
 			queue.PushBack(child)
 		}
 	}
 
+	// Empty result indicates none found
 	return result
 }
 
-// recursive helper method to remove files depth-first down to the leaf nodes
+// Recursively remove files depth-first down to the leaf nodes
 func RmRecursion(curr *File) {
 	if curr == nil || curr.GetParent() == nil {
 		// base case
@@ -87,8 +98,7 @@ func RmRecursion(curr *File) {
 	}
 }
 
-// Helper function to traverse from the current directory to the specified path,
-// using an absolute or relative path
+// Traverse from the current directory to the specified path, using an absolute or relative path
 func WalkToEndOfPath(pathSplit []string, currentDirectory *File, root *File) (*File, error) {
 	wd := currentDirectory
 
@@ -118,6 +128,7 @@ func WalkToEndOfPath(pathSplit []string, currentDirectory *File, root *File) (*F
 	return wd, nil
 }
 
+// Convert a slice of strings to a byte slice
 func StringSliceToByteSlice(strSlice []string) []byte {
 	var byteSlice []byte
 	for _, str := range strSlice {
@@ -126,6 +137,7 @@ func StringSliceToByteSlice(strSlice []string) []byte {
 	return byteSlice
 }
 
+// Add a special extension in case we're attempting to create a duplicate file
 func ModifyNameToHandleCollisions(name string) string {
 	nameSplit := strings.Split(name, ".")
 	if len(nameSplit) == 2 {

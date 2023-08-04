@@ -312,7 +312,10 @@ func (fs *Filesystem) MvFile(name string, target string) (string, error) {
 	if util.ExistsInCurrentDir(targetDir, name, false) {
 		// If a file with the same name already exists in the target directory, add a "1" extension
 		name = util.ModifyNameToHandleCollisions(name)
+		// Update the file name too
+		file.SetName(name)
 	}
+
 	targetDir.UpsertChild(name, file)
 	file.SetParent(targetDir)
 
