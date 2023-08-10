@@ -10,6 +10,7 @@ import (
 type Filesystem struct {
 	root             *util.File
 	currentDirectory *util.File
+	links            map[string]util.Link
 }
 
 // Creates a new filesystem and sets the current directory to the root ()
@@ -18,6 +19,7 @@ func NewFileSystem() *Filesystem {
 	return &Filesystem{
 		root:             rootDir,
 		currentDirectory: rootDir,
+		links:            make(map[string]util.Link),
 	}
 }
 
@@ -55,12 +57,12 @@ func (fs *Filesystem) MkDir(path string) (string, error) {
 	// Get the current working directory
 	wd := fs.currentDirectory
 
+	// The name of the new directory
+	var name string
+
 	// Split the path into individual directory names
 	pathSplit := util.SplitPath(path)
 	length := len(pathSplit)
-
-	// The name of the new directory
-	var name string
 
 	if length == 0 {
 		return "", errors.New("Must provide at least one directory name")
@@ -98,14 +100,22 @@ func (fs *Filesystem) MkDir(path string) (string, error) {
 //	string - the current working directory name
 //	error  - an error if the path provided is invalid
 func (fs *Filesystem) Cd(path string) (string, error) {
-	// Traverse to the end of the path specified
-	leafNode, err := util.WalkToEndOfPath(util.SplitPath(path), fs.currentDirectory, fs.root)
-	if err != nil {
-		return "", err
+	// Resolve the path and get the resolved file
+	resolvedLinkTarget := fs.ResolveLinks(path)
+	if resolvedLinkTarget != nil {
+		// If it's a valid link, set the current directory to the resolved link target
+		fs.currentDirectory = resolvedLinkTarget
+	} else {
+		// Traverse to the end of the path specified
+		leafNode, err := util.WalkToEndOfPath(util.SplitPath(path), fs.currentDirectory, fs.root)
+		if err != nil {
+			return "", err
+		}
+		// Set the current working directory to the last node in the tree
+		fs.currentDirectory = leafNode
 	}
-	// Set the current working directory to the last node in the tree
-	fs.currentDirectory = leafNode
-	return leafNode.GetName(), nil
+
+	return fs.currentDirectory.GetName(), nil
 }
 
 // Lists the contents (files and subdirectories) of the specified path or current directory.
@@ -123,14 +133,24 @@ func (fs *Filesystem) Ls(path ...string) (string, error) {
 	var wd *util.File
 
 	if len(path) == 1 {
-		splitPath := util.SplitPath(path[0])
+		resolvedLinkTarget := fs.ResolveLinks(path[0])
+		if resolvedLinkTarget != nil {
+			if !resolvedLinkTarget.IsDirectory() {
+				return "", fmt.Errorf("Cannot list contents of %s - not a directory", resolvedLinkTarget.GetName())
+			}
+			// If it's a valid link, set the current directory to the resolved link target
+			wd = resolvedLinkTarget
+		} else {
+			splitPath := util.SplitPath(path[0])
 
-		// Traverse to the end of the path
-		leafNode, err := util.WalkToEndOfPath(splitPath, fs.currentDirectory, fs.root)
-		if err != nil {
-			return "", err
+			// Traverse to the end of the path
+			leafNode, err := util.WalkToEndOfPath(splitPath, fs.currentDirectory, fs.root)
+			if err != nil {
+				return "", err
+			}
+			wd = leafNode
 		}
-		wd = leafNode
+
 	} else {
 		wd = fs.currentDirectory
 	}
@@ -156,6 +176,14 @@ func (fs *Filesystem) Rm(path string, recursive bool) (string, error) {
 
 	wd := fs.currentDirectory
 
+	// Check if the file to remove is a link by looking it up in the 'links' map.
+	if _, isLink := fs.links[path]; isLink {
+		// Simply remove the link from the links map and the working directory
+		wd.RemoveChild(path)
+		delete(fs.links, path)
+		return path, nil
+	}
+
 	// Get the file or directory to remove
 	toRemove := wd.GetChildByName(path)
 	if toRemove == nil {
@@ -176,6 +204,14 @@ func (fs *Filesystem) Rm(path string, recursive bool) (string, error) {
 		}
 		// Remove the directory and all subdirectories recursively
 		util.RmRecursion(toRemove)
+	}
+
+	// If the file/dir to remove is referenced via symlink, remove the target from that link
+	// For hard links, since they point to the underlying inode, we don't want to remove the target
+	symlinks := toRemove.GetSymLinks()
+	for name, link := range symlinks {
+		toRemove.RemoveSymLink(name)
+		link.RemoveTarget()
 	}
 
 	return toRemove.GetName(), nil
@@ -248,10 +284,19 @@ func (fs *Filesystem) WriteFile(name string, data ...string) (string, error) {
 //	error - an error if the file does not exist
 func (fs *Filesystem) ReadFile(name string) (string, error) {
 	wd := fs.currentDirectory
-	file := wd.GetChildByName(name)
 
-	if file == nil {
-		return "", fmt.Errorf("File %s does not exist!", name)
+	var file *util.File
+
+	// Try to resolve the link
+	resolvedLink := fs.ResolveLinks(name)
+
+	if resolvedLink != nil {
+		file = resolvedLink
+	} else {
+		file = wd.GetChildByName(name)
+		if file == nil {
+			return "", fmt.Errorf("File %s does not exist!", name)
+		}
 	}
 
 	return file.ReadFileContents(), nil
@@ -343,4 +388,74 @@ func (fs *Filesystem) FindFileOrDir(target string, searchSubtrees bool) []string
 	}
 
 	return result
+}
+
+// Create a symbolic link with the specified target file/directory and link name
+//
+// Parameters:
+//
+//	target (string) - the name of the file/directory to link
+//	linkeName (string) - the name of the symlink
+//
+// Returns:
+//
+//	string - the name of the link created
+//	 error - an error if the link creation was unsuccessful
+func (fs *Filesystem) CreateSymlink(target, linkName string) (string, error) {
+	wd := fs.currentDirectory
+
+	// TODO check if it's a valid path, not just a file/directory within the working direcotry
+	targetFile := wd.GetChildByName(target)
+	if targetFile == nil {
+		return "", fmt.Errorf("Cannot create symlink: %s file/directory not found", target)
+	}
+
+	symlink, err := targetFile.AddSymLink(linkName, fs.root)
+	if err != nil {
+		return "", err
+	}
+	fs.links[linkName] = symlink
+	return linkName, nil
+}
+
+// Create a hard link with the specified target file and link name. Hard links for directories are not currently
+// supported.
+// Parameters:
+//
+//	target (string) - the name of the file to link
+//	linkeName (string) - the name of the hard link
+//
+// Returns:
+//
+//	string - the name of the link created
+func (fs *Filesystem) CreateHardlink(target, linkName string) (string, error) {
+	wd := fs.currentDirectory
+
+	targetFile := wd.GetChildByName(target)
+	if targetFile == nil || targetFile.IsDirectory() {
+		return "", fmt.Errorf("Cannot create symlink: %s file not found", target)
+	}
+
+	hardLink, err := targetFile.AddHardLink(linkName)
+	if err != nil {
+		return "", err
+	}
+	fs.links[linkName] = hardLink
+	return linkName, nil
+}
+
+// Resolve a link from the given path name, looking up in the global "links" cache
+// Parameters:
+//
+//	name (string) - the name of the path to look up/resolve
+//
+// Returns:
+//
+//	*File - a pointer to the target file if the link was found, or nil if none exists
+func (fs *Filesystem) ResolveLinks(name string) *util.File {
+	if link, isLink := fs.links[name]; isLink {
+		return link.GetTarget()
+	}
+
+	return nil
 }

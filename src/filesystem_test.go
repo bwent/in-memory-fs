@@ -286,6 +286,73 @@ func TestFind(t *testing.T) {
 	}
 }
 
+func TestLink(t *testing.T) {
+	// Set up the test subject
+	fs := NewFileSystem()
+
+	filename := "test.txt"
+	hardLinkName := "hlink"
+
+	// Create a file and link to it
+	fs.MkFile(filename)
+	fs.WriteFile(filename, "hello world!")
+	fs.CreateHardlink(filename, hardLinkName)
+
+	// Remove the file
+	fs.Rm(filename, false)
+
+	// The hard link should still point to the file contents
+	contents, err := fs.ReadFile(hardLinkName)
+	assertMatchesAndNoErrors(contents, err, "hello world!", t)
+
+	// Try to create a link with a name that already exists
+	fs.MkFile(filename)
+	fs.CreateHardlink(filename, hardLinkName)
+	res, err := fs.CreateHardlink(filename, hardLinkName)
+	assertErrorAndEmptyResult(res, err, "Link with name hlink already exists", t)
+}
+
+func TestSymLink(t *testing.T) {
+	// Set up the test subject
+	fs := NewFileSystem()
+
+	filename := "test.txt"
+	symLinkName := "slink"
+
+	// Create a file and link to it
+	fs.MkFile(filename)
+	fs.WriteFile(filename, "hello world!")
+	fs.CreateSymlink(filename, symLinkName)
+
+	// Remove the file
+	fs.Rm(filename, false)
+
+	// The symlink should point to nothing since the file itself was removed
+	contents, err := fs.ReadFile(symLinkName)
+	assertErrorAndEmptyResult(contents, err, "File slink does not exist!", t)
+
+	// Try to create a link with a name that already exists
+	fs.MkFile(filename)
+	fs.CreateSymlink(filename, symLinkName)
+	res, err := fs.CreateSymlink(filename, symLinkName)
+	assertErrorAndEmptyResult(res, err, "Link with name slink already exists", t)
+
+	// Symlink to a directory
+	fs.MkDir("testdir")
+	fs.Cd("testdir")
+	fs.MkFile("test123.txt")
+	// Navigate back to the root dir
+	fs.Cd("../")
+	fs.CreateSymlink("testdir", symLinkName)
+
+	// Cd should chnage to "testdir"
+	res, err = fs.Cd(symLinkName)
+	assertMatchesAndNoErrors(res, err, "testdir", t)
+	// Ls should print the contents of the directory - aka test123.txt
+	res, err = fs.Ls()
+	assertMatchesAndNoErrors(res, err, "test123.txt", t)
+}
+
 // HELPER METHODS
 
 func assertMatchesAndNoErrors(res string, err error, expected string, t *testing.T) {

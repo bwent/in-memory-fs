@@ -54,6 +54,8 @@ Voila!
 * `readFile <name>`    - Reads the contents of the specified file in the current directory (truncated after 2000 chars)
 * `mvfile <name> <target>`  - Moves the specified file to the given target directory.
 * `find <name> <useRecursion> `  - Finds files or directories with the specified name. Set `useRecursion` to true to search subdirectories.
+* `link <target> <name> `  - Creates a hard link to the specified target with the given name. Only supports hard links for files
+* `symlink <target> <name>` - Creates a symbolic link (symlink) to the specified target (file or directory) with the given name.  
 
 ### Testing
 ```
