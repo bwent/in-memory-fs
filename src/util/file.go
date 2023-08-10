@@ -18,6 +18,8 @@ type File struct {
 	isDirectory bool
 	children    map[string]*File
 	parent      *File
+	symlinks    map[string]*SymLink
+	hardLinks   map[string]*HardLink
 }
 
 // NewFile creates a new File instance with the given name, isDir flag, and parent file.
@@ -28,6 +30,8 @@ func NewFile(name string, isDir bool, parent *File) *File {
 		contents:    []byte{},
 		children:    make(map[string]*File),
 		parent:      parent,
+		symlinks:    make(map[string]*SymLink),
+		hardLinks:   make(map[string]*HardLink),
 	}
 }
 
@@ -62,9 +66,41 @@ func (f *File) GetParent() *File {
 	return f.parent
 }
 
+func (f *File) GetSymLinks() map[string]*SymLink {
+	return f.symlinks
+}
+
+func (f *File) AddSymLink(name string, root *File) (*SymLink, error) {
+	if existingLink := f.symlinks[name]; existingLink != nil {
+		return nil, fmt.Errorf("Link with name %s already exists", name)
+	}
+
+	link := NewSymLink(name, f)
+	f.symlinks[name] = link
+	return link, nil
+}
+
+func (f *File) AddHardLink(name string) (*HardLink, error) {
+	if existingLink := f.hardLinks[name]; existingLink != nil {
+		return nil, fmt.Errorf("Link with name %s already exists", name)
+	}
+
+	link := NewHardLink(name, f)
+	f.hardLinks[name] = link
+	return link, nil
+}
+
+func (f *File) RemoveSymLink(name string) error {
+	if f.symlinks[name] != nil {
+		delete(f.symlinks, name)
+	}
+	return fmt.Errorf("Unable to remove link with name %s : link does not exist", name)
+}
+
 // Reads the contents of a file into a string, cutting off after `MaxFileReadSize` chars
 func (f *File) ReadFileContents() string {
 	str := string(f.contents)
+
 	if len(str) > MaxFileReadSize {
 		strSpl := strings.SplitAfterN(str, ",", MaxFileReadSize)
 		str = fmt.Sprintf("%s ...[trunated contents after %d chars]", strSpl[0], MaxFileReadSize)

@@ -22,6 +22,8 @@ var ValidInputMap = map[string][]int{
 	"readfile":  {1},
 	"mvfile":    {2},
 	"find":      {2},
+	"symlink":   {2},
+	"link":      {2},
 }
 
 const HelpText string = `Commands:
@@ -35,6 +37,9 @@ writeFile <name>    	Writes contents to the specified file in the current direct
 readFile <name>     	Reads the contents of the specified file in the current directory.
 mvfile <name> <target>  	Moves the specified file to the given target directory.
 find <name> <useRecursion>     	Finds files or directories with the specified name. Set useRecursion to true to search subdirectories.
+link <target> <name>   Creates a hard link to the specified target with the given name. Only supports hard links for files
+symlink <target> <name>  Creates a symbolic link (symlink) to the specified target (file or directory) with the given name.  
+-------------------------
 help                	Displays this help menu.
 exit                	Exits the program.`
 
@@ -134,6 +139,10 @@ func parseUserInputs(fs *src.Filesystem, inputs []string) error {
 		}
 		res := fs.FindFileOrDir(params[0], bVal)
 		fmt.Println(strings.Join(res, ","))
+	case "link":
+		printResults(fs.CreateHardlink(params[0], params[1]))
+	case "symlink":
+		printResults(fs.CreateSymlink(params[0], params[1]))
 	default:
 		return fmt.Errorf("Invalid method call %s - please run 'help' for more details", method)
 	}
